@@ -6,6 +6,7 @@ Upload an XLIFF file, run the check, and the tool flags any segment whose regist
 
 **Live demo:** https://loc-ai-qa-hlqb.vercel.app/
 
+![Screenshot of the tool flagging an informal segment in an otherwise-formal Hungarian file](docs/screenshot.png)
 
 
 ## Why this exists
