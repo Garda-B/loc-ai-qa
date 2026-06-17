@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file source-language="en" target-language="hu" datatype="plaintext" original="messages">
+    <body>
+      <trans-unit id="greeting">
+        <source>Welcome to Rover!</source>
+        <target>Üdvözöljük a Roveren!</target>
+      </trans-unit>
+      <trans-unit id="booking">
+        <source>You have a new booking.</source>
+        <target>Önnek új foglalása van.</target>
+      </trans-unit>
+      <trans-unit id="welcome_back">
+        <source>Welcome back! How are you?</source>
+        <target>Üdv újra! Hogy vagy?</target>
+      </trans-unit>
+      <trans-unit id="reminder">
+        <source>Please confirm your reservation.</source>
+        <target>Kérjük, erősítse meg a foglalását.</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
