@@ -32,7 +32,10 @@ export default function App() {
     try {
       const res = await fetch("/api/qa", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+  "Content-Type": "application/json",
+  "x-app-token": import.meta.env.VITE_APP_TOKEN,
+},
         body: JSON.stringify({ segments }),
       });
       const data = await res.json();

@@ -2,14 +2,48 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Best-effort in-memory limiter. Resets when the serverless instance recycles,
+// so it's a safety net, not a guarantee — see README note.
+const hits = new Map();
+const WINDOW_MS = 60_000;   // 1 minute
+const MAX_PER_WINDOW = 10;  // requests per IP per window
+
+function rateLimited(ip) {
+  const now = Date.now();
+  const rec = hits.get(ip) || { count: 0, start: now };
+  if (now - rec.start > WINDOW_MS) {
+    rec.count = 0;
+    rec.start = now;
+  }
+  rec.count++;
+  hits.set(ip, rec);
+  return rec.count > MAX_PER_WINDOW;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Use POST" });
   }
 
+  // 1. Shared-secret check: reject anything without the expected token.
+  if (req.headers["x-app-token"] !== process.env.APP_TOKEN) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // 2. Rate limit by IP (best-effort).
+  const ip = (req.headers["x-forwarded-for"] || "unknown").split(",")[0].trim();
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: "Too many requests, slow down." });
+  }
+
   const { segments } = req.body;
   if (!Array.isArray(segments) || segments.length === 0) {
     return res.status(400).json({ error: "No segments provided" });
+  }
+
+  // 3. Input cap: don't let one call fan out into a huge LLM batch.
+  if (segments.length > 50) {
+    return res.status(413).json({ error: "Too many segments (max 50)." });
   }
 
   const prompt = `You are a localization QA assistant. For each segment, classify the POLITENESS REGISTER of the "target" text as one of: "formal", "informal", or "none" (use "none" if the language has no T-V distinction or it can't be determined).
@@ -29,11 +63,9 @@ ${JSON.stringify(segments, null, 2)}`;
     });
     parsed = JSON.parse(completion.choices[0].message.content);
   } catch (err) {
-    // Covers both the API call failing AND the model returning non-JSON.
     return res.status(502).json({ error: "LLM call or parse failed: " + err.message });
   }
 
-  // Validate the shape: we trust nothing the model returns.
   const valid = ["formal", "informal", "none"];
   const findings = (parsed.results || [])
     .filter((r) => r && typeof r.id !== "undefined" && valid.includes(r.register))
@@ -48,14 +80,12 @@ ${JSON.stringify(segments, null, 2)}`;
     return res.status(502).json({ error: "Model returned no usable findings." });
   }
 
-  // Determine the document's dominant register, ignoring "none".
   const counts = { formal: 0, informal: 0 };
   for (const f of findings) {
     if (f.register === "formal" || f.register === "informal") counts[f.register]++;
   }
   const dominant = counts.formal >= counts.informal ? "formal" : "informal";
 
-  // Flag any segment that deviates from the dominant register.
   const results = findings.map((f) => ({
     ...f,
     isDeviation:
@@ -65,9 +95,5 @@ ${JSON.stringify(segments, null, 2)}`;
 
   const deviationCount = results.filter((r) => r.isDeviation).length;
 
-  return res.status(200).json({
-    dominantRegister: dominant,
-    deviationCount,
-    results,
-  });
+  return res.status(200).json({ dominantRegister: dominant, deviationCount, results });
 }
